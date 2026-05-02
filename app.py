@@ -1,4 +1,29 @@
 import streamlit as st
+
+def check_password():
+    """מחזירה True אם המשתמש הקיש סיסמה נכונה."""
+    if "password_correct" not in st.session_state:
+        # מציג תיבת טקסט להזנת סיסמה
+        st.text_input("הזן קוד גישה לצפייה בנתונים:", type="password", key="password")
+        if st.button("כניסה"):
+            if st.session_state["password"] == "12345": # כאן תקבע את הקוד שלך
+                st.session_state["password_correct"] = True
+                st.rerun()
+            else:
+                st.error("❌ קוד שגוי")
+        return False
+    else:
+        return True
+
+# אם הסיסמה לא נכונה, עוצרים כאן ולא מציגים את שאר הדאשבורד
+if not check_password():
+    st.stop()
+
+# --- מכאן והלאה מגיע שאר הקוד של הדאשבורד שלך ---
+st.success("גישה אושרה!")
+
+
+import streamlit as st
 import pandas as pd
 import plotly.express as px
 
