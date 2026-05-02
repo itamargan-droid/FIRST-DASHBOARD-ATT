@@ -2,80 +2,141 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# הגדרת כותרת לדף
-st.set_page_config(page_title="דשבורד מעקב מטופלים", layout="wide")
+# 1. הגדרות דף
+st.set_page_config(page_title="Patient Analytics - Purple & Yellow Edition", layout="wide")
 
-st.title("📊 דשבורד מעקב מטופלים - ניתוח נתונים")
+# 2. CSS מודרני עם דגש על הצבעים שביקשת
+st.markdown("""
+    <style>
+    /* רקע האתר */
+    .stApp {
+        background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+    }
+    
+    /* עיצוב כרטיסיות המדדים - צבע סגלגל כברירת מחדל */
+    div[data-testid="stMetric"] {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(10px);
+        border-radius: 15px;
+        padding: 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        border-bottom: 4px solid #9B59B6; /* קו סגלגל למטה */
+    }
 
-# טעינת הנתונים
+    /* כותרות */
+    h1, h2, h3 {
+        color: #2c3e50;
+        font-family: 'Segoe UI', sans-serif;
+    }
+
+    /* התאמת ה-Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #ffffff;
+    }
+
+    /* עיצוב טאבים */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        padding: 10px 20px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# 3. מפת צבעים (סגלגל וצהוב)
+custom_colors = {
+    "LECA": "#9B59B6", # סגלגל (Amethyst)
+    "DONA": "#F1C40F"  # צהוב (Sunflower)
+}
+
+# 4. פונקציית טעינת נתונים
 @st.cache_data
 def load_data():
-    df = pd.read_excel("נסיון.xlsx")
-    return df
+    try:
+        df = pd.read_excel("נסיון.xlsx")
+        df['תרופה'] = df['תרופה'].str.strip()
+        return df
+    except Exception as e:
+        st.error(f"לא נמצא קובץ אקסל: {e}")
+        return pd.DataFrame()
 
-try:
-    df = load_data()
+df = load_data()
 
-    # --- סרגל צדי למסננים ---
-    st.sidebar.header("מסננים")
+if not df.empty:
+    # --- כותרת ראשית ---
+    st.title("📊 דשבורד מעקב מטופלים")
+    st.markdown("---")
 
-    # מסנן מין
-    gender_list = ["הכל"] + list(df['מין'].unique())
-    selected_gender = st.sidebar.selectbox("בחר מין:", gender_list)
+    # --- סרגל צדי (Filters) ---
+    with st.sidebar:
+        st.header("מסננים")
+        selected_drug = st.multiselect("בחר תרופה:", options=df['תרופה'].unique(), default=list(df['תרופה'].unique()))
+        selected_aria = st.selectbox("סטטוס ARIA:", ["הכל"] + list(df['האם ARIA'].unique()))
 
-    # מסנן תרופה
-    drug_list = ["הכל"] + list(df['תרופה'].unique())
-    selected_drug = st.sidebar.selectbox("בחר תרופה:", drug_list)
-
-    # מסנן ARIA
-    aria_list = ["הכל"] + list(df['האם ARIA'].unique())
-    selected_aria = st.sidebar.selectbox("האם ARIA:", aria_list)
-
-    # מסנן תגובה לעירוי
-    reaction_list = ["הכל"] + list(df['האם תגובה לעירוי'].unique())
-    selected_reaction = st.sidebar.selectbox("תגובה לעירוי:", reaction_list)
-
-    # --- פילטור הנתונים בפועל ---
-    filtered_df = df.copy()
-
-    if selected_gender != "הכל":
-        filtered_df = filtered_df[filtered_df['מין'] == selected_gender]
-    
-    if selected_drug != "הכל":
-        filtered_df = filtered_df[filtered_df['תרופה'] == selected_drug]
-
+    # פילטור
+    mask = df['תרופה'].isin(selected_drug)
     if selected_aria != "הכל":
-        filtered_df = filtered_df[filtered_df['האם ARIA'] == selected_aria]
+        mask &= (df['האם ARIA'] == selected_aria)
+    
+    filtered_df = df[mask]
 
-    if selected_reaction != "הכל":
-        filtered_df = filtered_df[filtered_df['האם תגובה לעירוי'] == selected_reaction]
+    # --- מדדים (KPIs) ---
+    m1, m2, m3, m4 = st.columns(4)
+    with m1:
+        st.metric("סה\"כ מטופלים", len(filtered_df))
+    with m2:
+        val = round(filtered_df['גיל'].mean(), 1) if not filtered_df.empty else 0
+        st.metric("גיל ממוצע", val)
+    with m3:
+        aria_yes = len(filtered_df[filtered_df['האם ARIA'] == 'כן'])
+        st.metric("מקרים של ARIA", aria_yes)
+    with m4:
+        react_yes = len(filtered_df[filtered_df['האם תגובה לעירוי'] == 'כן'])
+        st.metric("תגובה לעירוי", react_yes)
 
-    # --- תצוגת מדדים מרכזיים (Metrics) ---
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("סה\"כ מטופלים (מסונן)", len(filtered_df))
-    col2.metric("גיל ממוצע", round(filtered_df['גיל'].mean(), 1) if not filtered_df.empty else 0)
-    col3.metric("מטופלי ARIA", len(filtered_df[filtered_df['האם ARIA'] == 'כן']))
-    col4.metric("תגובות לעירוי", len(filtered_df[filtered_df['האם תגובה לעירוי'] == 'כן']))
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    st.divider()
+    # --- טאבים לתצוגה ---
+    tab_charts, tab_table = st.tabs(["📈 ניתוח גרפי", "📄 נתונים גולמיים"])
 
-    # --- תצוגת גרפים ---
-    c1, c2 = st.columns(2)
+    with tab_charts:
+        c1, c2 = st.columns(2)
+        
+        with c1:
+            # היסטוגרמה בצבעי המותג
+            fig_age = px.histogram(
+                filtered_df, 
+                x="גיל", 
+                color="תרופה",
+                color_discrete_map=custom_colors,
+                title="התפלגות גילאים",
+                barmode="group",
+                template="plotly_white"
+            )
+            st.plotly_chart(fig_age, use_container_width=True)
 
-    with c1:
-        st.subheader("התפלגות גילאים")
-        fig_age = px.histogram(filtered_df, x="גיל", nbins=10, title="התפלגות גיל המטופלים", color_discrete_sequence=['#636EFA'])
-        st.plotly_chart(fig_age, use_container_width=True)
+        with c2:
+            # גרף עוגה (דונאט)
+            fig_pie = px.pie(
+                filtered_df, 
+                names="תרופה", 
+                hole=0.5,
+                color="תרופה",
+                color_discrete_map=custom_colors,
+                title="התפלגות תרופות במדגם"
+            )
+            st.plotly_chart(fig_pie, use_container_width=True)
 
-    with c2:
-        st.subheader("סוגי תרופות")
-        fig_drug = px.pie(filtered_df, names="תרופה", title="חלוקה לפי תרופה", hole=0.4)
-        st.plotly_chart(fig_drug, use_container_width=True)
+    with tab_table:
+        st.subheader("📋 נתוני מטופלים מפורטים")
+        st.dataframe(filtered_df, use_container_width=True)
 
-    # --- טבלת נתונים ---
-    st.subheader("📋 נתוני מטופלים מפורטים")
-    st.dataframe(filtered_df, use_container_width=True)
+else:
+    st.warning("הקוד מוכן, אך חסר קובץ הנתונים 'נסיון.xlsx' בתיקייה.")
 
-except Exception as e:
-    st.error(f"שגיאה בטעינת הקובץ: {e}")
-    st.info("וודא שהקובץ 'נסיון.xlsx' נמצא באותה תיקייה של הקוד.")
+# פוטר
+st.markdown("---")
+st.caption("מערכת ניטור קלינית - מבוסס סגלגל וצהוב")
