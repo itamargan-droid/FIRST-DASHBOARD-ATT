@@ -1,167 +1,88 @@
 import streamlit as st
+import pandas as pd
+import plotly.express as px
 
+# --- 1. הגדרות דף ---
+st.set_page_config(page_title="דשבורד מוגן - מעקב מטופלים", layout="wide")
+
+# --- 2. מנגנון סיסמה (חייב להופיע ראשון!) ---
 def check_password():
     """מחזירה True אם המשתמש הקיש סיסמה נכונה."""
     if "password_correct" not in st.session_state:
-        # מציג תיבת טקסט להזנת סיסמה
-        st.text_input("הזן קוד גישה לצפייה בנתונים:", type="password", key="password")
+        # עיצוב דף הכניסה
+        st.title("🔒 כניסה למערכת מאובטחת")
+        pwd = st.text_input("הזן קוד גישה:", type="password")
         if st.button("כניסה"):
-            if st.session_state["password"] == "12345": # כאן תקבע את הקוד שלך
+            if pwd == "12345": # <--- זו הסיסמה שלך
                 st.session_state["password_correct"] = True
                 st.rerun()
             else:
                 st.error("❌ קוד שגוי")
         return False
-    else:
-        return True
+    return True
 
-# אם הסיסמה לא נכונה, עוצרים כאן ולא מציגים את שאר הדאשבורד
+# עצירה כאן אם הסיסמה לא הוזנה - שום דבר מתחת לשורה הזו לא ירוץ!
 if not check_password():
     st.stop()
 
-# --- מכאן והלאה מגיע שאר הקוד של הדאשבורד שלך ---
-st.success("גישה אושרה!")
+# --- 3. אם הגענו לכאן, הסיסמה נכונה. עכשיו מריצים את העיצוב והנתונים ---
 
-
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-
-# 1. הגדרות דף
-st.set_page_config(page_title="Patient Analytics - Purple & Yellow Edition", layout="wide")
-
-# 2. CSS מודרני עם דגש על הצבעים שביקשת
+# הזרקת CSS לעיצוב המודרני (סגלגל וצהוב)
 st.markdown("""
     <style>
-    /* רקע האתר */
-    .stApp {
-        background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
-    }
-    
-    /* עיצוב כרטיסיות המדדים - צבע סגלגל כברירת מחדל */
+    .stApp { background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%); }
     div[data-testid="stMetric"] {
-        background: rgba(255, 255, 255, 0.8);
-        backdrop-filter: blur(10px);
+        background: white;
         border-radius: 15px;
         padding: 20px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        border-bottom: 4px solid #9B59B6; /* קו סגלגל למטה */
-    }
-
-    /* כותרות */
-    h1, h2, h3 {
-        color: #2c3e50;
-        font-family: 'Segoe UI', sans-serif;
-    }
-
-    /* התאמת ה-Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: #ffffff;
-    }
-
-    /* עיצוב טאבים */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        background-color: #f8f9fa;
-        border-radius: 5px;
-        padding: 10px 20px;
+        border-bottom: 4px solid #9B59B6;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. מפת צבעים (סגלגל וצהוב)
-custom_colors = {
-    "LECA": "#9B59B6", # סגלגל (Amethyst)
-    "DONA": "#F1C40F"  # צהוב (Sunflower)
-}
+custom_colors = {"LECA": "#9B59B6", "DONA": "#F1C40F"}
 
-# 4. פונקציית טעינת נתונים
 @st.cache_data
 def load_data():
     try:
         df = pd.read_excel("נסיון.xlsx")
         df['תרופה'] = df['תרופה'].str.strip()
         return df
-    except Exception as e:
-        st.error(f"לא נמצא קובץ אקסל: {e}")
+    except:
         return pd.DataFrame()
 
 df = load_data()
 
 if not df.empty:
-    # --- כותרת ראשית ---
     st.title("📊 דשבורד מעקב מטופלים")
-    st.markdown("---")
-
-    # --- סרגל צדי (Filters) ---
+    st.sidebar.success("✅ גישה מאובטחת אושרה")
+    
+    # --- שאר הקוד שלך (מסננים, מדדים וגרפים) ---
     with st.sidebar:
         st.header("מסננים")
         selected_drug = st.multiselect("בחר תרופה:", options=df['תרופה'].unique(), default=list(df['תרופה'].unique()))
-        selected_aria = st.selectbox("סטטוס ARIA:", ["הכל"] + list(df['האם ARIA'].unique()))
-
-    # פילטור
-    mask = df['תרופה'].isin(selected_drug)
-    if selected_aria != "הכל":
-        mask &= (df['האם ARIA'] == selected_aria)
     
+    mask = df['תרופה'].isin(selected_drug)
     filtered_df = df[mask]
 
-    # --- מדדים (KPIs) ---
-    m1, m2, m3, m4 = st.columns(4)
-    with m1:
-        st.metric("סה\"כ מטופלים", len(filtered_df))
-    with m2:
-        val = round(filtered_df['גיל'].mean(), 1) if not filtered_df.empty else 0
-        st.metric("גיל ממוצע", val)
-    with m3:
-        aria_yes = len(filtered_df[filtered_df['האם ARIA'] == 'כן'])
-        st.metric("מקרים של ARIA", aria_yes)
-    with m4:
-        react_yes = len(filtered_df[filtered_df['האם תגובה לעירוי'] == 'כן'])
-        st.metric("תגובה לעירוי", react_yes)
+    m1, m2, m3 = st.columns(3)
+    m1.metric("סה\"כ מטופלים", len(filtered_df))
+    m2.metric("גיל ממוצע", round(filtered_df['גיל'].mean(), 1) if not filtered_df.empty else 0)
+    m3.metric("מקרים של ARIA", len(filtered_df[filtered_df['האם ARIA'] == 'כן']))
 
     st.markdown("<br>", unsafe_allow_html=True)
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        fig_age = px.histogram(filtered_df, x="גיל", color="תרופה", color_discrete_map=custom_colors, title="התפלגות גילאים", barmode="group", template="plotly_white")
+        st.plotly_chart(fig_age, use_container_width=True)
+    with c2:
+        fig_pie = px.pie(filtered_df, names="תרופה", hole=0.5, color="תרופה", color_discrete_map=custom_colors, title="התפלגות תרופות")
+        st.plotly_chart(fig_pie, use_container_width=True)
 
-    # --- טאבים לתצוגה ---
-    tab_charts, tab_table = st.tabs(["📈 ניתוח גרפי", "📄 נתונים גולמיים"])
-
-    with tab_charts:
-        c1, c2 = st.columns(2)
-        
-        with c1:
-            # היסטוגרמה בצבעי המותג
-            fig_age = px.histogram(
-                filtered_df, 
-                x="גיל", 
-                color="תרופה",
-                color_discrete_map=custom_colors,
-                title="התפלגות גילאים",
-                barmode="group",
-                template="plotly_white"
-            )
-            st.plotly_chart(fig_age, use_container_width=True)
-
-        with c2:
-            # גרף עוגה (דונאט)
-            fig_pie = px.pie(
-                filtered_df, 
-                names="תרופה", 
-                hole=0.5,
-                color="תרופה",
-                color_discrete_map=custom_colors,
-                title="התפלגות תרופות במדגם"
-            )
-            st.plotly_chart(fig_pie, use_container_width=True)
-
-    with tab_table:
-        st.subheader("📋 נתוני מטופלים מפורטים")
-        st.dataframe(filtered_df, use_container_width=True)
+    st.subheader("📋 נתוני מטופלים מפורטים")
+    st.dataframe(filtered_df, use_container_width=True)
 
 else:
-    st.warning("הקוד מוכן, אך חסר קובץ הנתונים 'נסיון.xlsx' בתיקייה.")
-
-# פוטר
-st.markdown("---")
-st.caption("מערכת ניטור קלינית - מבוסס סגלגל וצהוב")
+    st.warning("הקוד רץ, אך לא נמצא קובץ נתונים.")
